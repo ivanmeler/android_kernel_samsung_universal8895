@@ -707,7 +707,8 @@ asmlinkage __visible void __init start_kernel(void)
 #ifdef CONFIG_RKP
 	vmm_init();
 	rkp_init();
-#if !defined(CONFIG_USE_SIGNED_BINARY)
+
+#if !defined(CONFIG_USE_SIGNED_BINARY) && !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 	rkp_call(RKP_NOSHIP_BIN, 0, 0, 0, 0, 0);
 #endif
 

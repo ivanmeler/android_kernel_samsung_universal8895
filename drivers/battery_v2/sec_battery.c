@@ -6420,10 +6420,6 @@ static int sec_bat_set_property(struct power_supply *psy,
 			battery->cisd.data[CISD_DATA_AICL_COUNT]++;
 			battery->cisd.data[CISD_DATA_AICL_COUNT_PER_DAY]++;
 #endif
-#if defined(CONFIG_SEC_ABC)
-			if (is_wired_type(battery->cable_type))
-				sec_abc_send_event("MODULE=battery@ERROR=aicl");
-#endif
 			break;
 		case POWER_SUPPLY_EXT_PROP_SYSOVLO:
 			if (battery->status != POWER_SUPPLY_STATUS_DISCHARGING) {

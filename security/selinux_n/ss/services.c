@@ -2510,10 +2510,8 @@ static inline int __security_genfs_sid(const char *fstype,
 	}
 
 	rc = -ENOENT;
-	if (!genfs || cmp){
-		printk(KERN_ERR "SELinux: %s: genfs || cmp\n", __func__);
+	if (!genfs || cmp)
 		goto out;
-	}
 
 	for (c = genfs->head; c; c = c->next) {
 		len = strlen(c->u.name);
@@ -2523,17 +2521,13 @@ static inline int __security_genfs_sid(const char *fstype,
 	}
 
 	rc = -ENOENT;
-	if (!c)	{
-		printk(KERN_ERR "SELinux: %s empty ocontext c \n", __func__);
+	if (!c)
 		goto out;
-	}
 
 	if (!c->sid[0]) {
 		rc = sidtab_context_to_sid(&sidtab, &c->context[0], &c->sid[0]);
-		if (rc)	{
-			printk(KERN_ERR "SELinux: %s: sid\n", __func__);
+		if (rc)
 			goto out;
-		}
 	}
 
 	*sid = c->sid[0];

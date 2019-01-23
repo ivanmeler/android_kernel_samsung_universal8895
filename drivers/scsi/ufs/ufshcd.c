@@ -5223,6 +5223,7 @@ clean:
 	spin_unlock_irqrestore(host->host_lock, flags);
 
 	clear_bit_unlock(tag, &hba->lrb_in_use);
+	ufshcd_release(hba);
 	wake_up(&hba->dev_cmd.tag_wq);
 
 out:

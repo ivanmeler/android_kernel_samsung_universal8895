@@ -823,11 +823,7 @@ static bool smfc_v4l2_init_fmt(const struct smfc_ctx *ctx,
 				const struct smfc_image_format *smfc_fmt,
 				__u32 type, struct v4l2_pix_format *pix)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(pix->pixelformat)) {
-		dev_err(ctx->smfc->dev,
-			"Multi-planar format is not permitted.\n");
-		return false;
-	}
+	BUG_ON(V4L2_TYPE_IS_MULTIPLANAR(pix->pixelformat));
 
 	if (!smfc_check_capable_of_decompression(ctx->smfc, smfc_fmt, type))
 		return false;

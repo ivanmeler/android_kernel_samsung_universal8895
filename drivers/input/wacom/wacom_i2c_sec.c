@@ -578,9 +578,26 @@ void epen_disable_mode(int mode)
 {
 	struct wacom_i2c *wac_i2c = wacom_get_drv_data(NULL);
 	struct i2c_client *client = wac_i2c->client;
+	static int depth;
 
-	input_info(true, &client->dev, "%s: %d\n", __func__, mode);
+	input_info(true, &client->dev, "%s: %d(%d)\n", __func__, mode, depth);
 
+	if (mode) {
+		if (!depth++)
+			goto out;
+	} else {
+		if (!(--depth))
+			goto out;
+
+		if (depth < 0)
+			depth = 0;
+	}
+
+	input_info(true, &client->dev, "%s: %d(%d)!\n", __func__, mode, depth);
+
+	return;
+
+out:
 	wac_i2c->epen_blocked = mode;
 
 	if (!wac_i2c->power_enable && wac_i2c->epen_blocked) {
@@ -590,6 +607,8 @@ void epen_disable_mode(int mode)
 	}
 
 	wacom_select_survey_mode(wac_i2c, wac_i2c->screen_on);
+
+	input_info(true, &client->dev, "%s: %d(%d)!\n", __func__, mode, depth);
 }
 EXPORT_SYMBOL(epen_disable_mode);
 

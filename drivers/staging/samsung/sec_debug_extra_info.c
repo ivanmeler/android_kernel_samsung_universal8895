@@ -23,12 +23,11 @@
 #define SZ_96	0x00000060
 #define SZ_960	0x000003c0
 
-#define EXTRA_VERSION	"RA30"
+#define EXTRA_VERSION	"QC14"
 /******************************************************************************
  * sec_debug_extra_info details
  *
  *	etr_a : basic reset information
- *	etr_b : basic reset information
  *	etr_c : hard-lockup information (callstack)
  *	etr_m : mfc error information
  *
@@ -55,7 +54,7 @@ struct sec_debug_panic_extra_info sec_debug_extra_info_init = {
 		{"SMP",		"", SZ_8},
 		{"ETC",		"", SZ_256},
 		{"ESR",		"", SZ_64},
-		{"MER",		"", SZ_16},
+		{"MER",		"", SZ_8},
 		{"PCB",		"", SZ_8},
 		{"SMD",		"", SZ_16},
 		{"CHI",		"", SZ_4},
@@ -83,8 +82,6 @@ struct sec_debug_panic_extra_info sec_debug_extra_info_init = {
 		{"PWROFF",	"", SZ_8},
 		{"PINT1",	"", SZ_8},
 		{"PINT2",	"", SZ_8},
-		{"PINT5",	"", SZ_8},
-		{"PINT6",	"", SZ_8},
 		{"RVD1",	"", SZ_256},
 		{"RVD2",	"", SZ_256},
 		{"RVD3",	"", SZ_256},
@@ -150,8 +147,7 @@ void sec_debug_init_extra_info(struct sec_debug_shared_info *sec_debug_info)
 		sec_debug_extra_info = &sec_debug_info->sec_debug_extra_info;
 		sec_debug_extra_info_backup = &sec_debug_info->sec_debug_extra_info_backup;
 
-		if (reset_reason == RR_K || reset_reason == RR_D || 
-			reset_reason == RR_P || reset_reason == RR_S) {
+		if (reset_reason == RR_K || reset_reason == RR_D || reset_reason == RR_P) {
 			memcpy(sec_debug_extra_info_backup, sec_debug_extra_info,
 				sizeof(struct sec_debug_panic_extra_info));
 		}
@@ -558,8 +554,7 @@ static int set_debug_reset_extra_info_proc_show(struct seq_file *m, void *v)
 {
 	char buf[SZ_1K];
 
-	if (reset_reason == RR_K || reset_reason == RR_D || 
-		reset_reason == RR_P || reset_reason == RR_S) {
+	if (reset_reason == RR_K || reset_reason == RR_D || reset_reason == RR_P) {
 		sec_debug_store_extra_info_A();
 		memcpy(buf, (char *)SEC_DEBUG_EXTRA_INFO_VA, SZ_1K);
 

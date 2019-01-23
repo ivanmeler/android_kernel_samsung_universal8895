@@ -2182,16 +2182,6 @@ static int mfc_chg_set_property(struct power_supply *psy,
 		break;
 #endif
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
-		/* send battery level to TX */
-		if (val->intval != charger->pdata->capacity) {
-			charger->pdata->capacity = val->intval;
-			pr_info("%s Send Capacity(%d) to TX\n", __func__, charger->pdata->capacity);
-			mfc_send_packet(charger, MFC_HEADER_AFC_CONF,
-				WPC_COM_CHG_LEVEL, &(charger->pdata->capacity), 1);
-			msleep(250);
-			mfc_send_packet(charger, MFC_HEADER_AFC_CONF,
-				WPC_COM_CHG_LEVEL, &(charger->pdata->capacity), 1);
-		}
 		vout = mfc_get_adc(charger, MFC_ADC_VOUT);
 		vrect = mfc_get_adc(charger, MFC_ADC_VRECT);
 		iout = mfc_get_adc(charger, MFC_ADC_RX_IOUT);
@@ -2200,6 +2190,7 @@ static int mfc_chg_set_property(struct power_supply *psy,
 			__func__, vout, vrect, iout, freq, mfc_get_ic_revision(charger, MFC_IC_REVISION),
 			mfc_get_ic_revision(charger, MFC_IC_FONT), charger->pdata->cable_type);
 
+		charger->pdata->capacity = val->intval;
 		if ((vout < 6500) && (charger->pdata->capacity >= 85)) {
 			mfc_reg_read(charger->client, MFC_RX_COMM_MOD_FET_REG, &tmp);
 			if (tmp != 0x00) {
