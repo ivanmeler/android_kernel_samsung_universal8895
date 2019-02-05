@@ -182,16 +182,11 @@ static int tee_scheduler(void *arg)
 		nq_reset_idle_timeout();
 		if (timeslice--) {
 			/* Resume SWd from where it was */
-			ret = mc_fc_yield(timeslice);
+			ret = mc_fc_yield();
 		} else {
-			u32 session_id = 0;
-			u32 payload = 0;
-
-			nq_retrieve_last(&session_id, &payload);
 			timeslice = SCHEDULING_FREQ;
-
 			/* Call SWd scheduler */
-			ret = mc_fc_nsiq(session_id, payload);
+			ret = mc_fc_nsiq();
 		}
 
 		/* Always flush log buffer after the SWd has run */

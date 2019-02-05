@@ -118,14 +118,15 @@ static inline void cbuf_get(struct cbuf *cbuf)
 	kref_get(&cbuf->kref);
 }
 
-/* Must only be called by tee_cbuf_put */
 static void cbuf_release(struct kref *kref)
 {
 	struct cbuf *cbuf = container_of(kref, struct cbuf, kref);
 	struct tee_client *client = cbuf->client;
 
 	/* Unlist from client */
+	mutex_lock(&client->cbufs_lock);
 	list_del_init(&cbuf->list);
+	mutex_unlock(&client->cbufs_lock);
 	/* Release client token */
 	client_put(client);
 	/* Free */
@@ -139,11 +140,7 @@ static void cbuf_release(struct kref *kref)
 
 static inline void cbuf_put(struct cbuf *cbuf)
 {
-	struct tee_client *client = cbuf->client;
-
-	mutex_lock(&client->cbufs_lock);
 	kref_put(&cbuf->kref, cbuf_release);
-	mutex_unlock(&client->cbufs_lock);
 }
 
 /*
@@ -297,7 +294,7 @@ static inline void cwsm_get(struct cwsm *cwsm)
 	kref_get(&cwsm->kref);
 }
 
-/* Must only be called by cwsm_put */
+/* Do not call directly */
 static void cwsm_release(struct kref *kref)
 {
 	struct cwsm *cwsm = container_of(kref, struct cwsm, kref);
@@ -305,7 +302,9 @@ static void cwsm_release(struct kref *kref)
 	struct mcp_buffer_map map;
 
 	/* Unlist from client */
+	mutex_lock(&client->quick_lock);
 	list_del_init(&cwsm->list);
+	mutex_unlock(&client->quick_lock);
 	/* Unmap buffer from SWd (errors ignored) */
 	tee_mmu_buffer(cwsm->mmu, &map);
 	map.secure_va = cwsm->sva;
@@ -323,11 +322,7 @@ static void cwsm_release(struct kref *kref)
 
 static inline void cwsm_put(struct cwsm *cwsm)
 {
-	struct tee_client *client = cwsm->client;
-
-	mutex_lock(&client->quick_lock);
 	kref_put(&cwsm->kref, cwsm_release);
-	mutex_unlock(&client->quick_lock);
 }
 
 static inline struct cwsm *cwsm_find(struct tee_client *client,
@@ -436,14 +431,20 @@ struct tee_client *client_create(bool is_from_kernel)
 	return client;
 }
 
-/* Must only be called by client_put */
+/*
+ * Free client object + all objects it contains.
+ * Can be called only by last user referencing the client,
+ * therefore mutex lock seems overkill
+ */
 static void client_release(struct kref *kref)
 {
 	struct tee_client *client;
 
 	client = container_of(kref, struct tee_client, kref);
 	/* Client is closed, remove from closing list */
+	mutex_lock(&client_ctx.closing_clients_lock);
 	list_del(&client->list);
+	mutex_unlock(&client_ctx.closing_clients_lock);
 	mc_dev_devel("freed client %p", client);
 	if (client->task)
 		put_task_struct(client->task);
@@ -455,9 +456,7 @@ static void client_release(struct kref *kref)
 
 void client_put(struct tee_client *client)
 {
-	mutex_lock(&client_ctx.closing_clients_lock);
 	kref_put(&client->kref, client_release);
-	mutex_unlock(&client_ctx.closing_clients_lock);
 }
 
 /*
@@ -1411,19 +1410,16 @@ void client_init(void)
 static inline int cbuf_debug_structs(struct kasnprintf_buf *buf,
 				     struct cbuf *cbuf)
 {
-	return kasnprintf(buf,
-			  "\tcbuf %pK [%d]: addr %pK uaddr %pK len %u\n",
-			  cbuf, kref_read(&cbuf->kref), (void *)cbuf->addr,
-			  (void *)cbuf->uaddr, cbuf->len);
+	return kasnprintf(buf, "\tcbuf %p [%d]: addr %lx uaddr %lx len %u\n",
+			  cbuf, kref_read(&cbuf->kref), cbuf->addr,
+			  cbuf->uaddr, cbuf->len);
 }
 
 static inline int cwsm_debug_structs(struct kasnprintf_buf *buf,
 				     struct cwsm *cwsm)
 {
-	return kasnprintf(buf,
-			  "\tcwsm %pK [%d]: buf %pK len %llu flags 0x%x\n",
-			  cwsm, kref_read(&cwsm->kref),
-			  (void *)(uintptr_t)cwsm->memref.buffer,
+	return kasnprintf(buf, "\tcwsm %p [%d]: buf %llx len %llu flags 0x%x\n",
+			  cwsm, kref_read(&cwsm->kref), cwsm->memref.buffer,
 			  cwsm->memref.size, cwsm->memref.flags);
 }
 
@@ -1436,12 +1432,12 @@ static int client_debug_structs(struct kasnprintf_buf *buf,
 	int ret;
 
 	if (client->pid)
-		ret = kasnprintf(buf, "client %pK [%d]: %s (%d)%s\n",
+		ret = kasnprintf(buf, "client %p [%d]: %s (%d)%s\n",
 				 client, kref_read(&client->kref),
 				 client->comm, client->pid,
 				 is_closing ? " <closing>" : "");
 	else
-		ret = kasnprintf(buf, "client %pK [%d]: [kernel]%s\n",
+		ret = kasnprintf(buf, "client %p [%d]: [kernel]%s\n",
 				 client, kref_read(&client->kref),
 				 is_closing ? " <closing>" : "");
 
