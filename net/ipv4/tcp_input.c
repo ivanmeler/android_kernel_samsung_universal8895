@@ -500,19 +500,26 @@ static int __tcp_grow_window(const struct sock *sk, const struct sk_buff *skb)
 static void tcp_grow_window(struct sock *sk, const struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+#ifdef CONFIG_MPTCP
+	int meta_room;
+#else
 	int room;
+#endif
 
 #ifdef CONFIG_MPTCP
 	struct sock *meta_sk = mptcp(tp) ? mptcp_meta_sk(sk) : sk;
 	struct tcp_sock *meta_tp = tcp_sk(meta_sk);
 #endif
 
+#ifdef CONFIG_MPTCP
+	meta_room = min_t(int, meta_tp->window_clamp, tcp_space(sk)) - meta_tp->rcv_ssthresh;
+#else
 	room = min_t(int, tp->window_clamp, tcp_space(sk)) - tp->rcv_ssthresh;
+#endif
 
 	/* Check #1 */
 #ifdef CONFIG_MPTCP
-	if (meta_tp->rcv_ssthresh < meta_tp->window_clamp &&
-	    (int)meta_tp->rcv_ssthresh < tcp_space(meta_sk) &&
+	if (meta_room > 0 &&
 #else
 	if (room > 0 &&
 #endif
@@ -536,8 +543,7 @@ static void tcp_grow_window(struct sock *sk, const struct sk_buff *skb)
 		if (incr) {
 			incr = max_t(int, incr, 2 * skb->len);
 #ifdef CONFIG_MPTCP
-			meta_tp->rcv_ssthresh = min(meta_tp->rcv_ssthresh + incr,
-					            meta_tp->window_clamp);
+			tp->rcv_ssthresh += min(meta_room, incr);
 #else
 			tp->rcv_ssthresh += min(room, incr);
 #endif
