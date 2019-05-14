@@ -47,6 +47,10 @@ void mc_set_schedule_policy(int core);
 int __mc_switch_core(int cpu);
 #endif
 
+#if KERNEL_VERSION(3, 15, 0) > LINUX_VERSION_CODE
+#define MIN_NICE   -20
+#endif
+
 struct fastcall_work {
 #ifdef MC_FASTCALL_WORKER_THREAD
 	struct kthread_work work;
@@ -411,7 +415,6 @@ static void fastcall_work_func(struct work_struct *work)
 		cpumask_t new_msk = mc_exec_core_switch(mc_fc_generic);
 
 		/* ExySp */
-		//set_cpus_allowed(fastcall_thread, new_msk);
 		set_cpus_allowed_ptr(fastcall_thread, &new_msk);
 #else
 		mc_exec_core_switch(mc_fc_generic);
@@ -493,6 +496,8 @@ int mc_fastcall_init(void)
 		mc_dev_err("cannot create fastcall wq: %d", ret);
 		return ret;
 	}
+
+	set_user_nice(fastcall_thread, MIN_NICE);
 
 	/* this thread MUST run on CPU 0 at startup */
 	set_cpus_allowed_ptr(fastcall_thread, &new_msk);
@@ -620,13 +625,15 @@ int mc_fc_mem_trace(phys_addr_t buffer, u32 size)
 	return convert_fc_ret(mc_fc_generic.as_out.ret);
 }
 
-int mc_fc_nsiq(void)
+int mc_fc_nsiq(u32 sid, u32 payload)
 {
 	union mc_fc_generic fc;
 	int ret;
 
 	memset(&fc, 0, sizeof(fc));
 	fc.as_in.cmd = MC_SMC_N_SIQ;
+	fc.as_in.param[1] = sid;
+	fc.as_in.param[2] = payload;
 	mc_fastcall(&fc);
 	ret = convert_fc_ret(fc.as_out.ret);
 	if (ret)
@@ -635,13 +642,14 @@ int mc_fc_nsiq(void)
 	return ret;
 }
 
-int mc_fc_yield(void)
+int mc_fc_yield(u32 timeslice)
 {
 	union mc_fc_generic fc;
 	int ret;
 
 	memset(&fc, 0, sizeof(fc));
 	fc.as_in.cmd = MC_SMC_N_YIELD;
+	fc.as_in.param[1] = timeslice;
 	mc_fastcall(&fc);
 	ret = convert_fc_ret(fc.as_out.ret);
 	if (ret)
