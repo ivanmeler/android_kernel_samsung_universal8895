@@ -30,7 +30,6 @@
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
 #include <linux/ctype.h>
-#include <linux/moduleparam.h>
 
 /* selinuxfs pseudo filesystem for exporting the security policy API.
    Based on the proc code and the fs/nfsd/nfsctl.c code. */
@@ -133,31 +132,13 @@ static unsigned long sel_last_ino = SEL_INO_NEXT - 1;
 #define SEL_INO_MASK			0x00ffffff
 
 #define TMPBUFLEN	12
-
-static int user_selinux_enforcing = 0;
-
-/* 0 = Disabled, 1 = Enabled */
-static int enable_selinuxfake = 0;
-module_param(enable_selinuxfake, int, 0644);
-
-/* 
- * Used when the 'selinux_fakemode' value is not equal to 1.
- * 0 = Permissive, 1 = Enforcing, -1 = Original(Stock) Mode.
- */
-static int selinux_usermode = 0;
-module_param(selinux_usermode, int, 0644);
-
 static ssize_t sel_read_enforce(struct file *filp, char __user *buf,
 				size_t count, loff_t *ppos)
 {
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
 
-
-	if (enable_selinuxfake == 1)
-		length = scnprintf(tmpbuf, TMPBUFLEN, "%d", user_selinux_enforcing);
-	else
-		length = scnprintf(tmpbuf, TMPBUFLEN, "%d", selinux_enforcing);
+	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", selinux_enforcing);
 	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
 }
 
@@ -192,15 +173,23 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
 
-	user_selinux_enforcing = new_value;
-	length = count;
-	goto out;
-	if (enable_selinuxfake == 1) {
-		user_selinux_enforcing = new_value;
-		length = count;
-		goto out;
-	}
-
+// [ SEC_SELINUX_PORTING_COMMON
+#ifdef CONFIG_ALWAYS_ENFORCE
+	// If build is user build and enforce option is set, selinux is always enforcing
+	new_value = 1;
+	length = task_has_security(current, SECURITY__SETENFORCE);
+	audit_log(current->audit_context, GFP_KERNEL, AUDIT_MAC_STATUS,
+                        "config_always_enforce - true; enforcing=%d old_enforcing=%d auid=%u ses=%u",
+                        new_value, selinux_enforcing,
+                        from_kuid(&init_user_ns, audit_get_loginuid(current)),
+                        audit_get_sessionid(current));
+#if !defined(CONFIG_RKP_KDP)
+	selinux_enforcing = new_value;
+#endif
+	avc_ss_reset(0);
+	selnl_notify_setenforce(new_value);
+	selinux_status_update_setenforce(new_value);
+#else
 	if (new_value != selinux_enforcing) {
 		length = task_has_security(current, SECURITY__SETENFORCE);
 		if (length)
@@ -216,13 +205,22 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		selnl_notify_setenforce(selinux_enforcing);
 		selinux_status_update_setenforce(selinux_enforcing);
 	}
-	if (selinux_usermode > 1)
-		selinux_usermode = 1;
-	if (selinux_usermode >= 0)
-		selinux_enforcing = selinux_usermode;
-	else
-		selinux_enforcing = new_value;
+#endif
+// ] SEC_SELINUX_PORTING_COMMON
 	length = count;
+
+#if defined(CONFIG_TZ_ICCC)
+	if (selinux_enabled && selinux_enforcing) {
+		if (0 != Iccc_SaveData_Kernel(SELINUX_STATUS,0x0)) {
+			printk(KERN_ERR "%s: Iccc_SaveData_Kernel failed, type = %x, value =%x\n", __func__,SELINUX_STATUS,0x0);
+		}
+	}
+	else {
+		if (0 != Iccc_SaveData_Kernel(SELINUX_STATUS,0x1)) {
+			printk(KERN_ERR "%s: Iccc_SaveData_Kernel failed, type = %x, value =%x\n", __func__,SELINUX_STATUS,0x1);
+		}
+	}
+#endif
 
 out:
 	free_page((unsigned long) page);
