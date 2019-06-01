@@ -624,12 +624,12 @@ static void apply_config_terms(struct perf_evsel *evsel,
 	struct perf_evsel_config_term *term;
 	struct list_head *config_terms = &evsel->config_terms;
 	struct perf_event_attr *attr = &evsel->attr;
-	struct callchain_param param;
+	/* callgraph default */
+	struct callchain_param param = {
+		.record_mode = callchain_param.record_mode,
+	};
 	u32 dump_size = 0;
 	char *callgraph_buf = NULL;
-
-	/* callgraph default */
-	param.record_mode = callchain_param.record_mode;
 
 	list_for_each_entry(term, config_terms, list) {
 		switch (term->type) {
@@ -1051,6 +1051,7 @@ void perf_evsel__exit(struct perf_evsel *evsel)
 {
 	assert(list_empty(&evsel->node));
 	assert(evsel->evlist == NULL);
+	perf_evsel__free_counts(evsel);
 	perf_evsel__free_fd(evsel);
 	perf_evsel__free_id(evsel);
 	perf_evsel__free_config_terms(evsel);

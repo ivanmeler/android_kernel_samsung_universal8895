@@ -1109,6 +1109,8 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		struct rq *rq = rq_of_rt_rq(rt_rq);
 
 		raw_spin_lock(&rq->lock);
+		update_rq_clock(rq);
+
 		if (rt_rq->rt_time) {
 			u64 runtime;
 
@@ -2039,7 +2041,7 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 		rt_se = pick_next_rt_entity(rq, rt_rq);
 		BUG_ON(!rt_se);
 		update_rt_load_avg(now, rt_se, rt_rq, cpu_of(rq_of_rt_rq(rt_rq)));
-		rt_rq->curr = rt_se;		
+		rt_rq->curr = rt_se;
 		rt_rq = group_rt_rq(rt_se);
 	} while (rt_rq);
 
@@ -2181,8 +2183,12 @@ static inline unsigned int hmp_cpu_is_fastest(int cpu)
 {
 	struct list_head *pos;
 
-	pos = &hmp_cpu_domain(cpu)->hmp_domains;
-	return pos == hmp_domains.next;
+	if (!cpumask_test_cpu(cpu, cpu_active_mask)) {
+		return 0;
+	} else {
+		pos = &hmp_cpu_domain(cpu)->hmp_domains;
+		return pos == hmp_domains.next;
+	}
 }
 
 /* Check if cpu is in slowest hmp_domain */
@@ -2190,8 +2196,12 @@ static inline unsigned int hmp_cpu_is_slowest(int cpu)
 {
 	struct list_head *pos;
 
-	pos = &hmp_cpu_domain(cpu)->hmp_domains;
-	return list_is_last(pos, &hmp_domains);
+	if (!cpumask_test_cpu(cpu, cpu_active_mask)) {
+		return 1;
+	} else {
+		pos = &hmp_cpu_domain(cpu)->hmp_domains;
+		return list_is_last(pos, &hmp_domains);
+	}
 }
 
 
@@ -2266,7 +2276,7 @@ static int find_victim_rt_rq(struct task_struct *task, struct cpumask *domain_cp
 			/* If Non-RT CPU is exist, select it first */
 			*best_cpu = i;
 			victim_rt = false;
-			trace_sched_fluid_victim_rt_cpu(task, victim, *best_cpu, "Victim Normal");			
+			trace_sched_fluid_victim_rt_cpu(task, victim, *best_cpu, "Victim Normal");
 			break;
 		}
 	}
@@ -2291,6 +2301,7 @@ static int find_lowest_rq_fluid(struct task_struct *task)
 	int boost = false;
 	u64 cpu_load, min_load = ULLONG_MAX;
 	int i;
+	struct cpumask tmp_mask;
 
 	/* Make sure the mask is initialized first */
 	if (unlikely(!lowest_mask))
@@ -2302,21 +2313,28 @@ static int find_lowest_rq_fluid(struct task_struct *task)
 	if (task->rt.avg.util_avg > frt_boost_threshold)
 		boost = true;
 
-	cpupri_find(&task_rq(task)->rd->cpupri, task, lowest_mask); 
+	cpupri_find(&task_rq(task)->rd->cpupri, task, lowest_mask);
+
+	if (!cpumask_test_cpu(prev_cpu,cpu_active_mask)) {
+		prev_cpu = this_cpu;
+	}
 
 	rcu_read_lock();
 
 	if (sysctl_sched_restrict_cluster_spill) {
-		hmpd = hmp_cpu_domain(task_cpu(task));
+		hmpd = hmp_cpu_domain(prev_cpu);
 	} else {
 		hmpd = boost ? \
-			hmp_faster_domain(task_cpu(task)) : \
-			hmp_slower_domain(task_cpu(task));
+			hmp_faster_domain(prev_cpu) : \
+			hmp_slower_domain(prev_cpu);
 	}
 
+	if (!hmpd)
+		goto skip;
 
 	do {
-		hmp_cpu_mask = &hmpd->cpus;
+		cpumask_and(&tmp_mask, &hmpd->cpus, cpu_active_mask);
+		hmp_cpu_mask = &tmp_mask;
 		min_load = ULLONG_MAX;
 
 		for_each_cpu_and(i, hmp_cpu_mask, lowest_mask) {
@@ -2387,8 +2405,9 @@ static int find_lowest_rq_fluid(struct task_struct *task)
 			hmp_slower_domain(cpumask_any(hmp_cpu_mask)) : \
 			hmp_faster_domain(cpumask_any(hmp_cpu_mask));
 
-	} while (!cpumask_empty(&hmpd->cpus));
+	} while (!hmpd && !cpumask_empty(&hmpd->cpus));
 
+skip:
 	rcu_read_unlock();
 
 	return best_cpu;
@@ -3070,7 +3089,7 @@ static void switched_to_rt(struct rq *rq, struct task_struct *p)
 		if (p->nr_cpus_allowed > 1 && rq->rt.overloaded)
 			queue_push_tasks(rq);
 #else
-		if (p->prio < rq->curr->prio)
+		if (p->prio < rq->curr->prio && cpu_online(cpu_of(rq)))
 			resched_curr(rq);
 #endif /* CONFIG_SMP */
 	}

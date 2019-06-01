@@ -86,3 +86,10 @@ config PROC_STLOG
 	bool "Enable Storage log"
 	depends on PROC_FS
 	default y
+
+config PROC_UID
+	bool "Include /proc/uid/ files"
+	default y
+	depends on PROC_FS && RT_MUTEXES
+	help
+	Provides aggregated per-uid information under /proc/uid.

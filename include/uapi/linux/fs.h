@@ -177,6 +177,7 @@ struct ci_lookup_data {
 
 #define FS_IOC_INVAL_MAPPING		_IO('f', 13)	/* CONFIG_EPM FMP */
 #define FS_IOC_CI_LOOKUP		_IOWR('f', 15, struct ci_lookup_data)
+
 /*
  * File system encryption support
  */
@@ -198,6 +199,8 @@ struct ci_lookup_data {
 #define FS_ENCRYPTION_MODE_AES_256_CTS		4
 #define FS_ENCRYPTION_MODE_AES_128_CBC		5
 #define FS_ENCRYPTION_MODE_AES_128_CTS		6
+#define FS_ENCRYPTION_MODE_SPECK128_256_XTS	7
+#define FS_ENCRYPTION_MODE_SPECK128_256_CTS	8
 
 
 struct fscrypt_policy {
