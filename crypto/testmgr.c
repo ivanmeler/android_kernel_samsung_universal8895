@@ -4091,6 +4091,7 @@ non_fips_alg:
 	return rc;
 }
 
+#ifdef CONFIG_CRYPTO_FIPS
 int testmgr_crypto_proc_init(void)
 {
 #ifdef CONFIG_CRYPTO_FIPS
@@ -4101,6 +4102,7 @@ int testmgr_crypto_proc_init(void)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(testmgr_crypto_proc_init);
+#endif
 
 #endif /* CONFIG_CRYPTO_MANAGER_DISABLE_TESTS */
 
